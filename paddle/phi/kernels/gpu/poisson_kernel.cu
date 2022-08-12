@@ -38,9 +38,20 @@ __global__ void get_poisson(const int N,
                             unsigned int offset) {
   int idx = threadIdx.x + blockIdx.x * blockDim.x;
   if (idx < N){
+//
+//    curandStatePhilox4_32_10_t state;
+//    curand_init(seed, idx, offset, &state);
+//    out[idx] = curand_poisson(&state, in[idx]);
+#ifdef __NVCC__
     curandStatePhilox4_32_10_t state;
     curand_init(seed, idx, offset, &state);
-    out[idx] = curand_poisson(&state, in[idx]);
+    out[idx] = static_cast<T>(curand_poisson(&state, in[idx]));
+#elif __HIPCC__
+    hiprandStatePhilox4_32_10_t state;
+    hiprand_init(seed, idx, offset, &state);
+    out[idx] = static_cast<T>(hiprand_poisson(&state, in[idx]));
+#endif
+
   }
 }
 
@@ -51,7 +62,9 @@ void PoissonKernel(const Context& ctx, const DenseTensor& x, DenseTensor* out) {
   T* dev_in_data, dev_out_data;
   const int size = x.numel(); //x的维度
 
-  int block_size = 256;
+  int block_size =
+      std::min(256, ctx.GetMaxThreadsPerBlock());
+//  int block_size = ;
   dim3 dim_block(block_size);
   dim3 dim_grid((size + block_size - 1) / block_size);
 
