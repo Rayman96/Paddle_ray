@@ -50,19 +50,19 @@ __device__ inline int resolve_root_int(int b, int cX4, int x, int32_t sign) {
 
 template <typename T>
 __device__ inline void get_coordinate_in_triu_trapezoid(int f,
-                                             int x,
-                                             T* row,
-                                             T* col) {
+                                                        int x,
+                                                        T* row,
+                                                        T* col) {
   f <<= 1; // all statements use 2f, so only calculate it once here.
   auto b = -1 - f;
   auto cX4 = x << 3; // 4 * c = 4 * (2x) = 8x;
   *row = resolve_root_int<T>(b, cX4, x, -1);
-  *col = x - ((f - row + 1) * row >> 1) + row;
+  *col = x - ((f - *row + 1) * *row >> 1) + *row;
 }
 
 template <typename T>
 __global__ void triu_indices_kernel(T* out_data,
-                                    int row_offset,
+                                    int col_offset,
                                     int m_first_row,
                                     int col,
                                     int rectangle_size,
@@ -86,7 +86,6 @@ __global__ void triu_indices_kernel(T* out_data,
     out_data[linear_index] = r;
     out_data[linear_index + triu_size] = c;
   }
-  }
 }
 
 template <typename T, typename Context>
@@ -99,36 +98,35 @@ void TriuIndicesKernel(const Context& dev_ctx,
 
   T* out_data = dev_ctx.template Alloc<T>(out);
   auto out_dims = out->dims();
-  int triu_size = row * col - out_dims[1];
-//  auto tensor = empty_cuda({2, triu_size}, dtype_opt, layout_opt, device_opt, pin_memory_opt);
+  int triu_size = rows * cols - out_dims[1];
+  //  auto tensor = empty_cuda({2, triu_size}, dtype_opt, layout_opt, device_opt, pin_memory_opt);
 
   if (triu_size > 0) {
     // # of triu elements in the first row
     auto m_first_row = offset > 0 ?
-                                  std::max<int>(col - offset, 0) : // upper bounded by col
-                                    col;
+                                  std::max<int>(cols - offset, 0) : // upper bounded by col
+                           cols;
 
     // size of the top rectangle
     int rectangle_size = 0;
     if (offset < 0) {
-      rectangle_size = std::min<int>(row, -offset) * col;
+      rectangle_size = std::min<int>(rows, -offset) * cols;
     }
 
-//  using gpu_launch_config to get grid_size and block_size
+    //  using gpu_launch_config to get grid_size and block_size
     auto config = phi::backends::gpu::GetGpuLaunchConfig1D(dev_ctx, triu_size);
 
     triu_indices_kernel<T><<<config.block_per_grid.x,
                              config.thread_per_block.x,
-                            0,
-                            dev_ctx.stream()>>>(out_data,
-                                                 tensor.data_ptr<scalar_t>(),
+                             0,
+                             dev_ctx.stream()>>>(out_data,
                                                  std::max<int>(0, offset),
                                                  m_first_row,
-                                                 col,
+                                                 cols,
                                                  rectangle_size,
                                                  triu_size);
 
-    }
+  }
 }
 }  // namespace phi
 

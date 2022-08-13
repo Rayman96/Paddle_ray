@@ -36,7 +36,7 @@ void TriuIndicesKernel(const Context& dev_ctx,
 
     // move to the next column and check if (r, c) is still in bound
     c += 1;
-    if (c >= col) {
+    if (c >= cols) {
       r += 1;
       // not typing std::max with scalar_t as it could be an unsigned type
       // NOTE: not necessary to check if c is less than col or overflows here,
